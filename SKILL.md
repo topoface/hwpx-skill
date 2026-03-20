@@ -19,6 +19,7 @@ ${CLAUDE_SKILL_DIR}/
 │   ├── fix_namespaces.py      # ★ 필수: 네임스페이스 후처리
 │   ├── validate.py            # HWPX 구조 검증
 │   ├── analyze_template.py    # HWPX 심층 분석
+│   ├── clone_form.py           # ★ 양식 복제 (Workflow F)
 │   ├── text_extract.py        # 텍스트 추출
 │   ├── md2hwpx.py             # 마크다운→HWPX 자동 변환
 │   └── office/{unpack,pack}.py
@@ -59,6 +60,7 @@ pip install python-hwpx lxml --break-system-packages
  ├─ "양식에 내용 채워줘" → 워크플로우 B (템플릿 치환)
  ├─ "HWPX 수정해줘" → 워크플로우 C (기존 문서 편집)
  ├─ "이 HWPX 양식으로 만들어줘" → 워크플로우 D (레퍼런스 기반)
+ ├─ "이 양식 복제해서 내용 바꿔줘" → 워크플로우 F (양식 복제) ★
  └─ "HWPX 읽어줘" → 워크플로우 E (읽기/추출)
 ```
 
@@ -259,6 +261,85 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/fix_namespaces.py" result.hwpx
 python3 "${CLAUDE_SKILL_DIR}/scripts/text_extract.py" doc.hwpx
 python3 "${CLAUDE_SKILL_DIR}/scripts/text_extract.py" doc.hwpx --format markdown
 ```
+
+---
+
+## 워크플로우 F: 양식 복제 (★ 복잡한 양식에 필수)
+
+> **기존 HWPX를 통째로 복사 + 텍스트만 치환. 테이블·이미지·스타일 100% 보존.**
+>
+> ⚠️ **테이블 5개 이상 또는 이미지 포함이면 반드시 워크플로우 F 사용.**
+> 워크플로우 D는 header만 재활용하고 section을 새로 만들기 때문에 구조의 97.5%를 잃는다.
+
+### 전체 흐름
+
+```
+[1] 원본 양식 분석:  clone_form.py --analyze sample.hwpx
+[2] 구문 치환 맵 작성 (JSON): {"원본 문구": "새 문구", ...}
+[3] (선택) 키워드 폴백 맵 작성: {"재난": "교육위기", "안전": "AI교육", ...}
+[4] 복제 실행:  clone_form.py sample.hwpx output.hwpx --map map.json --keywords kw.json
+[5] fix_namespaces.py 후처리 (필수!)
+[6] validate.py 검증
+```
+
+### 2단계 치환 전략
+
+| 단계 | 범위 | 용도 |
+|------|------|------|
+| Phase 1 (--map) | 전체 XML | 긴 문구·문장 단위 치환 |
+| Phase 2 (--keywords) | `<hp:t>` 내부만 | 남은 키워드 개별 치환 (폴백) |
+
+> 키워드는 길이 내림차순 정렬하여 "재난안전관리"가 "재난"보다 먼저 매칭된다.
+> Phase 2는 `<hp:t>` 태그 안의 텍스트만 대상이므로 XML 구조를 손상시키지 않는다.
+
+### CLI 사용법
+
+```bash
+# 분석
+python3 "${CLAUDE_SKILL_DIR}/scripts/clone_form.py" --analyze sample.hwpx
+
+# 복제 (구문 치환만)
+python3 "${CLAUDE_SKILL_DIR}/scripts/clone_form.py" \
+  sample.hwpx output.hwpx --map replacements.json
+
+# 복제 (구문 + 키워드 폴백)
+python3 "${CLAUDE_SKILL_DIR}/scripts/clone_form.py" \
+  sample.hwpx output.hwpx --map map.json --keywords keywords.json --validate
+
+# 후처리 (필수!)
+python3 "${CLAUDE_SKILL_DIR}/scripts/fix_namespaces.py" output.hwpx
+python3 "${CLAUDE_SKILL_DIR}/scripts/validate.py" output.hwpx
+```
+
+### Python API
+
+```python
+from clone_form import clone, analyze, extract_texts, validate_result
+
+# 분석
+texts = analyze("sample.hwpx")
+
+# 복제
+clone("sample.hwpx", "output.hwpx",
+      replacements={"원본 문구": "새 문구"},
+      keywords={"재난": "교육위기"},
+      title="새 문서 제목", creator="작성자")
+
+# 검증
+result = validate_result("sample.hwpx", "output.hwpx",
+                         replacements={...}, keywords={...})
+print(f"커버리지: {result['coverage_pct']:.1f}%")
+```
+
+### 워크플로우 D vs F 비교
+
+| 항목 | D (레퍼런스 기반) | F (양식 복제) |
+|------|------------------|--------------|
+| 원본 구조 보존 | ~2.5% | **100%** |
+| 테이블 | ❌ 재구성 필요 | ✅ 그대로 |
+| 이미지 | ❌ BinData 누락 | ✅ 그대로 |
+| 스타일 | ⚠️ ID 매칭 필요 | ✅ 그대로 |
+| 적합한 경우 | 간단한 텍스트 문서 | **복잡한 양식** |
 
 ---
 
