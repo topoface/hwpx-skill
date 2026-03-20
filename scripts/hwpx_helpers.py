@@ -62,6 +62,35 @@ def xml_escape(text):
     )
 
 
+# --- header.xml 검증 ---
+def validate_header_for_government(header_path):
+    """government 템플릿 header.xml인지 검증.
+    charPr 81/82/83/144, borderFill 8~15를 사용하려면
+    반드시 government header (335KB, 160+ charPr)가 필요하다.
+    기본 header (60KB, 11 charPr)를 쓰면 서식이 깨진다.
+    """
+    import os
+    size = os.path.getsize(header_path)
+    if size < 100000:  # government header는 335KB
+        raise ValueError(
+            f"⚠️ header.xml이 너무 작습니다 ({size:,} bytes).\n"
+            f"government 템플릿의 컬러 배너/섹션 바를 사용하려면\n"
+            f"government header.xml (335KB)을 사용해야 합니다.\n"
+            f"올바른 경로: $SKILL_DIR/templates/government/header.xml\n"
+            f"현재 경로: {header_path}"
+        )
+    # charPr 개수 확인
+    with open(header_path, "r", encoding="utf-8") as f:
+        content = f.read(500)
+    m = re.search(r'charProperties\s+itemCnt="(\d+)"', content)
+    if m and int(m.group(1)) < 145:
+        raise ValueError(
+            f"⚠️ header.xml의 charPr가 {m.group(1)}개뿐입니다.\n"
+            f"government 템플릿은 160+ charPr가 필요합니다 (charPr 144 사용).\n"
+            f"올바른 header: $SKILL_DIR/templates/government/header.xml"
+        )
+
+
 # --- secPr 추출 ---
 def extract_secpr_and_colpr(hwpx_path):
     """레퍼런스 HWPX에서 secPr + colPr 블록 추출."""

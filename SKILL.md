@@ -131,6 +131,10 @@ SKILL_DIR = Path("${CLAUDE_SKILL_DIR}")
 REF_HWPX = SKILL_DIR / "assets" / "government-reference.hwpx"
 OUTPUT = Path("output.hwpx")
 
+# 0. government header 검증 (잘못된 header 사용 방지)
+GOV_HEADER = SKILL_DIR / "templates/government/header.xml"
+validate_header_for_government(GOV_HEADER)
+
 # 1. secPr 추출
 secpr, colpr = extract_secpr_and_colpr(REF_HWPX)
 
@@ -166,6 +170,7 @@ subprocess.run(["python3", str(SKILL_DIR/"scripts/validate.py"), str(OUTPUT)])
 |------|------|
 | `next_id()` | 고유 ID 생성 |
 | `xml_escape(text)` | XML 특수문자 이스케이프 |
+| `validate_header_for_government(path)` | header.xml이 government용인지 검증 (크기·charPr 수 체크) |
 | `extract_secpr_and_colpr(hwpx)` | HWPX에서 secPr+colPr 추출 |
 | `make_first_para(secpr, colpr)` | 첫 문단 (secPr 포함) |
 | `make_empty_line()` | 빈 줄 |
