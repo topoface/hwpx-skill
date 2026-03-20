@@ -20,6 +20,29 @@ import re
 import sys
 
 
+def _fix_item_counts(header_xml):
+    """header.xml의 itemCnt 속성을 실제 자식 요소 수와 일치시킨다.
+
+    charPr, borderFill 등을 추가/삭제한 뒤 itemCnt가 불일치하면
+    한컴 뷰어가 추가된 스타일을 무시하므로 반드시 보정해야 한다.
+    """
+    count_map = {
+        "charProperties": r"<hh:charPr ",
+        "borderFills": r"<hh:borderFill ",
+        "paraProperties": r"<hh:paraPr ",
+        "styles": r"<hh:style ",
+    }
+    for container, child_re in count_map.items():
+        actual = len(re.findall(child_re, header_xml))
+        if actual > 0:
+            header_xml = re.sub(
+                rf"(<hh:{container}\s+itemCnt=\")\d+(\")",
+                rf"\g<1>{actual}\2",
+                header_xml,
+            )
+    return header_xml
+
+
 def fix_hwpx_namespaces(hwpx_path):
     """
     HWPX 파일의 ns0:/ns1: 등 자동 생성 프리픽스를
@@ -55,6 +78,10 @@ def fix_hwpx_namespaces(hwpx_path):
                         text = text.replace(f"xmlns:{old_prefix}=", f"xmlns:{new_prefix}=")
                         text = text.replace(f"<{old_prefix}:", f"<{new_prefix}:")
                         text = text.replace(f"</{old_prefix}:", f"</{new_prefix}:")
+
+                    # header.xml의 itemCnt 보정 (charPr/borderFill 추가 시 필수)
+                    if item.filename == "Contents/header.xml":
+                        text = _fix_item_counts(text)
 
                     data = text.encode("utf-8")
 
