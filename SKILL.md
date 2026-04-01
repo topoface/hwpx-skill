@@ -582,3 +582,60 @@ subprocess.run(["python3", f"{SKILL_DIR}/scripts/fix_namespaces.py", "output.hwp
 - **2025 개정 공문서 작성법**: [references/gonmunseo-2025-writing-rules.md](references/gonmunseo-2025-writing-rules.md)
 - **보고서 기호**: □(16pt) → ○(15pt) → ―(15pt) → ※(13pt)
 - **공문서 번호**: 1. → 가. → 1) → 가) → (1) → (가) → ① → ㉮
+
+---
+
+## ★ SVG→PNG→HWPX 삽입 시 주의사항 (2026-04-01 추가)
+
+### 한글 폰트 필수 설치
+
+cairosvg로 SVG→PNG 변환 시, 서버 환경에 한글 폰트가 없으면 **한글이 전부 □(네모)로 깨진다.**
+
+```bash
+# 반드시 변환 전에 실행
+apt-get install -y fonts-noto-cjk
+fc-cache -fv
+```
+
+SVG에서 font-family 지정:
+```css
+text { font-family: 'Noto Sans CJK KR', sans-serif; }
+```
+
+### 이미지 크기 계산 (HWPUNIT)
+
+`make_image_para(binary_item_id, width, height)` 호출 시, width/height를 임의로 넣지 말 것.
+**페이지 콘텐츠 영역에 맞춰 계산한다:**
+
+```
+콘텐츠 폭 = pageWidth - leftMargin - rightMargin
+report 기본: 59528 - 5669 - 5669 = 48190 HWPUNIT
+government 기본: 59528 - 5669 - 5669 = 48190 HWPUNIT
+
+이미지 높이 = 48190 × (SVG viewBox 높이 / SVG viewBox 폭)
+```
+
+예시:
+```python
+W = 48190  # 콘텐츠 폭
+# SVG가 680×420이면:
+make_image_para("1", W, int(W * 420 / 680))  # = 48190 × 29764
+```
+
+### 전체 워크플로우 (SVG 도식 → HWPX)
+
+```bash
+# 1. 한글 폰트 설치
+apt-get install -y fonts-noto-cjk && fc-cache -fv
+
+# 2. SVG 작성 (font-family: 'Noto Sans CJK KR')
+
+# 3. PNG 변환
+pip install cairosvg --break-system-packages
+python3 -c "import cairosvg; cairosvg.svg2png(url='diagram.svg', write_to='diagram.png', output_width=1360, dpi=192)"
+
+# 4. HWPX 빌드 시 이미지 크기 = 48190 × 비례높이
+make_image_para("1", 48190, int(48190 * svg_height / svg_width))
+
+# 5. 나머지 동일 (add_images_to_hwpx → fix_namespaces → validate)
+```
