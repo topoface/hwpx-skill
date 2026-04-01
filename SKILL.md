@@ -639,3 +639,92 @@ make_image_para("1", 48190, int(48190 * svg_height / svg_width))
 
 # 5. 나머지 동일 (add_images_to_hwpx → fix_namespaces → validate)
 ```
+
+---
+
+## ★ SVG→PNG 렌더링 정책 (2026-04-01 개정)
+
+> **Playwright 우선, cairosvg 폴백.**
+> cairosvg는 시스템 폰트 의존 → 매 세션마다 한글 폰트 재설치 필요 → 근본 해결 아님.
+> Playwright(브라우저)는 웹폰트 자동 로드 → 폰트 설치 불필요.
+
+### 방법 1: Playwright MCP (권장)
+
+MCP에 Playwright가 연결되어 있으면 이 방법을 사용한다.
+
+```python
+# 1. SVG를 HTML로 감싸서 임시 파일 생성
+html = f"""<!DOCTYPE html>
+<html><head>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500&display=swap" rel="stylesheet">
+<style>body {{ margin:0; background:white; }}</style>
+</head><body>{svg_content}</body></html>"""
+
+# /tmp/diagram.html로 저장
+Path("/tmp/diagram.html").write_text(html, encoding="utf-8")
+
+# 2. Playwright MCP로 렌더링
+#    browser_navigate → file:///tmp/diagram.html
+#    browser_take_screenshot → /tmp/diagram.png
+#    (또는 browser_evaluate로 element.screenshot 호출)
+```
+
+### 방법 2: Playwright Python (MCP 없을 때)
+
+```bash
+pip install playwright --break-system-packages
+playwright install chromium
+```
+
+```python
+from playwright.sync_api import sync_playwright
+
+def svg_to_png_playwright(svg_content, output_path, width=1360):
+    html = f"""<!DOCTYPE html>
+<html><head>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500&display=swap" rel="stylesheet">
+<style>body {{ margin:0; background:white; }}</style>
+</head><body>{svg_content}</body></html>"""
+    
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page(viewport={"width": width, "height": 800})
+        page.set_content(html)
+        page.wait_for_load_state("networkidle")  # 웹폰트 로드 대기
+        svg_el = page.query_selector("svg")
+        svg_el.screenshot(path=output_path)
+        browser.close()
+```
+
+### 방법 3: cairosvg (폴백 — Playwright 사용 불가 시)
+
+```bash
+apt-get install -y fonts-noto-cjk && fc-cache -fv
+pip install cairosvg --break-system-packages
+```
+
+```python
+import cairosvg
+# SVG에서 font-family를 'Noto Sans CJK KR'로 지정 필수
+cairosvg.svg2png(bytestring=svg.encode('utf-8'), write_to=output_path,
+                 output_width=1360, dpi=192)
+```
+
+### 선택 기준 (Decision Tree)
+
+```
+SVG→PNG 필요
+ ├─ Playwright MCP 연결됨 → 방법 1 (권장)
+ ├─ MCP 없음, pip 설치 가능 → 방법 2
+ └─ 둘 다 불가 → 방법 3 (cairosvg + apt 폰트 설치)
+```
+
+### 공통: HWPX 이미지 크기 계산
+
+```python
+# 페이지 콘텐츠 영역 (report/government 공통)
+W = 48190  # pageWidth(59528) - leftMargin(5669) - rightMargin(5669)
+
+# SVG 비율에 맞춰 높이 계산
+make_image_para("1", W, int(W * svg_height / svg_width))
+```
