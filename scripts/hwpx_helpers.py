@@ -399,3 +399,119 @@ def update_content_hpf(hwpx_path, images):
                 else:
                     zout.writestr(item, data)
     os.replace(tmp, str(hwpx_path))
+
+
+# --- 계층형 문단 (들여쓰기 + 기호) ---
+
+# 기호 계층 정의
+BULLET_MARKERS = {
+    0: "■",   # 대항목
+    1: "●",   # 중항목  
+    2: "·",   # 소항목
+    3: "-",   # 세부항목
+}
+
+INDENT_SPACES = {
+    0: "",           # 대항목: 들여쓰기 없음
+    1: "   ",        # 중항목: 3칸
+    2: "      ",     # 소항목: 6칸
+    3: "         ",  # 세부항목: 9칸
+}
+
+
+def make_bullet_para(text, level=0, marker_charpr="18", text_charpr="38", parapr="4"):
+    """
+    계층형 기호 문단.
+    
+    level=0: ■ 대항목 (볼드)
+    level=1: ● 중항목 (볼드)
+    level=2: · 소항목 (일반)
+    level=3: - 세부항목 (일반)
+    
+    사용 예:
+        make_bullet_para("구성요소", level=0)
+        make_bullet_para("이중반전 송수신 모듈", level=1)
+        make_bullet_para("정위상/역위상 신호 쌍 발신 및 차동 수신", level=2)
+    """
+    marker = BULLET_MARKERS.get(level, "-")
+    indent = INDENT_SPACES.get(level, "")
+    p_id = next_id()
+    
+    if level <= 1:
+        # 대항목/중항목: 기호 볼드 + 텍스트 볼드
+        return (
+            f'<hp:p id="{p_id}" paraPrIDRef="{parapr}" styleIDRef="0" '
+            f'pageBreak="0" columnBreak="0" merged="0">'
+            f'<hp:run charPrIDRef="{marker_charpr}"><hp:t>{xml_escape(f"{indent}{marker} {text}")}</hp:t></hp:run></hp:p>'
+        )
+    else:
+        # 소항목/세부항목: 기호 + 텍스트 일반
+        return (
+            f'<hp:p id="{p_id}" paraPrIDRef="{parapr}" styleIDRef="0" '
+            f'pageBreak="0" columnBreak="0" merged="0">'
+            f'<hp:run charPrIDRef="{text_charpr}"><hp:t>{xml_escape(f"{indent}{marker} {text}")}</hp:t></hp:run></hp:p>'
+        )
+
+
+def make_heading_para(text, level=1, charpr="18", parapr="4"):
+    """
+    섹션 제목 문단.
+    
+    level=1: ■ 제목 (대섹션)
+    level=2: ● 제목 (중섹션)
+    
+    make_bullet_para(level=0)과 동일하지만 의미적으로 "제목"임을 명시.
+    """
+    return make_bullet_para(text, level=level-1, marker_charpr=charpr, parapr=parapr)
+
+
+def make_key_value_para(key, value, key_charpr="18", val_charpr="38", parapr="4", indent=1):
+    """
+    키: 값 형태의 문단. 키는 볼드, 값은 일반.
+    
+    사용 예:
+        make_key_value_para("조건", "X밴드, 300W, 39dBi", indent=1)
+        make_key_value_para("결과", "탐지율 100%, 허위탐지율 0%", indent=1)
+    """
+    indent_str = INDENT_SPACES.get(indent, "")
+    marker = BULLET_MARKERS.get(indent, "·")
+    p_id = next_id()
+    return (
+        f'<hp:p id="{p_id}" paraPrIDRef="{parapr}" styleIDRef="0" '
+        f'pageBreak="0" columnBreak="0" merged="0">'
+        f'<hp:run charPrIDRef="{key_charpr}"><hp:t>{xml_escape(f"{indent_str}{marker} {key}: ")}</hp:t></hp:run>'
+        f'<hp:run charPrIDRef="{val_charpr}"><hp:t>{xml_escape(value)}</hp:t></hp:run></hp:p>'
+    )
+
+
+def make_structured_content(items):
+    """
+    구조화된 콘텐츠를 일괄 생성.
+    
+    items = [
+        {"type": "heading", "text": "구성요소", "level": 1},
+        {"type": "bullet", "text": "이중반전 송수신 모듈: 정위상/역위상 신호 쌍 발신", "level": 1},
+        {"type": "bullet", "text": "구현 예: 발룬 소자", "level": 2},
+        {"type": "bullet", "text": "동적 비트열 패턴 생성기: 매 전송마다 패턴 갱신", "level": 1},
+        {"type": "kv", "key": "조건", "value": "X밴드, 300W, 39dBi", "indent": 2},
+        {"type": "empty"},
+    ]
+    
+    Returns: list of XML paragraph strings
+    """
+    paras = []
+    for item in items:
+        t = item.get("type", "bullet")
+        if t == "heading":
+            paras.append(make_heading_para(item["text"], level=item.get("level", 1)))
+        elif t == "bullet":
+            paras.append(make_bullet_para(item["text"], level=item.get("level", 0)))
+        elif t == "kv":
+            paras.append(make_key_value_para(item["key"], item["value"], indent=item.get("indent", 1)))
+        elif t == "empty":
+            paras.append(make_empty_line())
+        elif t == "text":
+            paras.append(make_text_para(item["text"], 
+                         charpr=item.get("charpr", "38"), 
+                         parapr=item.get("parapr", "4")))
+    return paras

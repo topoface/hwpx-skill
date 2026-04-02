@@ -728,3 +728,87 @@ W = 48190  # pageWidth(59528) - leftMargin(5669) - rightMargin(5669)
 # SVG 비율에 맞춰 높이 계산
 make_image_para("1", W, int(W * svg_height / svg_width))
 ```
+
+---
+
+## ★ 계층형 콘텐츠 작성 가이드 (2026-04-02 추가)
+
+### 문제
+기존 `make_text_para`, `make_body_para`만으로는 모든 텍스트가 같은 레벨로 출력된다.
+들여쓰기, 기호 계층, 키:값 구분이 안 되어 문서가 읽기 어렵다.
+
+### 해결: 계층형 함수 사용
+
+```python
+from hwpx_helpers import (
+    make_bullet_para,      # 기호 + 들여쓰기 문단
+    make_heading_para,     # 섹션 제목
+    make_key_value_para,   # 키: 값 (키 볼드)
+    make_structured_content # 일괄 생성
+)
+```
+
+### 기호 계층 체계
+
+```
+■ 대항목 (level=0, 볼드)          — 섹션 제목급
+   ● 중항목 (level=1, 볼드)       — 하위 주제
+      · 소항목 (level=2, 일반)    — 설명/내용
+         - 세부항목 (level=3, 일반) — 부연/예시
+```
+
+### 사용 예시
+
+```python
+# 예시: 이미지에서 본 "아이디어의 상세한 설명" 영역
+
+paras = make_structured_content([
+    {"type": "heading", "text": "구성요소", "level": 1},
+    {"type": "bullet", "text": "이중반전 송수신 모듈", "level": 1},
+    {"type": "bullet", "text": "정위상/역위상 신호 쌍 발신 및 차동 수신", "level": 2},
+    {"type": "bullet", "text": "구현 예: 발룬 소자", "level": 3},
+    {"type": "bullet", "text": "동적 비트열 패턴 생성기", "level": 1},
+    {"type": "bullet", "text": "매 전송마다 패턴 갱신", "level": 2},
+    {"type": "bullet", "text": "전용 하드웨어 처리기", "level": 1},
+    {"type": "bullet", "text": "소프트웨어 없이 신호 처리 전 과정 수행", "level": 2},
+    {"type": "empty"},
+    {"type": "heading", "text": "작동 원리", "level": 1},
+    {"type": "bullet", "text": "송신: 동적 비트열 패턴을 코드화하여 정위상/역위상 신호 쌍으로 발신", "level": 2},
+    {"type": "bullet", "text": "수신: 두 신호 차동 처리 → 환경 간섭 상쇄 → 허위탐지율 0 구조적 보장", "level": 2},
+    {"type": "empty"},
+    {"type": "heading", "text": "성능 시뮬레이션 (몬테카를로 50회 반복)", "level": 1},
+    {"type": "kv", "key": "조건", "value": "X밴드, 300W, 39dBi, NF 2dB, 30km / RCS 0.01m² 드론", "indent": 2},
+    {"type": "kv", "key": "결과", "value": "탐지율(Pd) = 100%, 허위탐지율(Pfa) = 0%", "indent": 2},
+])
+
+# paras는 XML 문자열 리스트 → content.xml에 삽입
+```
+
+### 출력 결과 (한컴오피스에서 보이는 모습)
+
+```
+■ 구성요소
+   ● 이중반전 송수신 모듈
+      · 정위상/역위상 신호 쌍 발신 및 차동 수신
+         - 구현 예: 발룬 소자
+   ● 동적 비트열 패턴 생성기
+      · 매 전송마다 패턴 갱신
+   ● 전용 하드웨어 처리기
+      · 소프트웨어 없이 신호 처리 전 과정 수행
+
+■ 작동 원리
+      · 송신: 동적 비트열 패턴을 코드화하여 정위상/역위상 신호 쌍으로 발신
+      · 수신: 두 신호 차동 처리 → 환경 간섭 상쇄 → 허위탐지율 0 구조적 보장
+
+■ 성능 시뮬레이션 (몬테카를로 50회 반복)
+      · 조건: X밴드, 300W, 39dBi, NF 2dB, 30km / RCS 0.01m² 드론
+      · 결과: 탐지율(Pd) = 100%, 허위탐지율(Pfa) = 0%
+```
+
+### 규칙
+
+1. **한 문장이 길면 반드시 쪼갠다.** "A 및 B (구현 예: C)" → level=1 "A 및 B", level=2 "구현 예: C"
+2. **섹션 제목은 make_heading_para 또는 level=0.** 절대 make_text_para로 쓰지 않는다.
+3. **키:값은 make_key_value_para 사용.** "조건: X밴드..." 같은 형태는 키를 볼드로 분리.
+4. **섹션 사이에 make_empty_line() 하나.** 빈 줄 없으면 구분 안 됨.
+5. **level 1~2를 가장 많이 쓴다.** level 0은 섹션 시작에만. level 3은 부연에만.
