@@ -812,3 +812,45 @@ paras = make_structured_content([
 3. **키:값은 make_key_value_para 사용.** "조건: X밴드..." 같은 형태는 키를 볼드로 분리.
 4. **섹션 사이에 make_empty_line() 하나.** 빈 줄 없으면 구분 안 됨.
 5. **level 1~2를 가장 많이 쓴다.** level 0은 섹션 시작에만. level 3은 부연에만.
+
+---
+
+## ★ 개요 번호 오류 방지 (2026-04-02 추가)
+
+### 문제
+paraPrIDRef=2~8은 `heading type="OUTLINE"`이 켜져 있다.
+이 ID를 쓰면 동그라미 안의 가,나,다 / 타,파,하 등 자동 번호가 붙는다.
+
+### 금지 규칙
+```
+paraPrIDRef=0  → 안전 (일반 본문)
+paraPrIDRef=1  → 안전 (일반 본문)
+paraPrIDRef=2~8 → ⛔ 금지 (개요 번호 자동 삽입됨)
+paraPrIDRef=9+ → 템플릿마다 다름. 확인 필요.
+paraPrIDRef=18 → 안전 (report 템플릿 기본 본문)
+```
+
+**모든 make_*_para 함수의 기본값은 parapr="0" 이다.**
+절대 parapr="4" 등 2~8 범위를 기본값으로 쓰지 않는다.
+
+---
+
+## ★ 한글 버전 호환성 (2026-04-02 추가)
+
+### 문제
+한글 2018 사용자가 한글 2022용 HWPX를 열면 "상위 버전에서 제작" 경고가 뜬다.
+
+### 해결
+```python
+from hwpx_helpers import make_version_xml
+
+# HWPX 빌드 시 version.xml을 한글 2018 호환으로 생성
+version_xml = make_version_xml(target="2018")  # 기본값
+
+# zipfile에 쓰기
+zf.writestr("version.xml", version_xml)
+```
+
+### 기본 정책
+**target="2018"을 기본으로 사용한다.**
+Bruce의 한글이 2018이므로, 모든 HWPX 출력물은 2018 호환으로 생성.

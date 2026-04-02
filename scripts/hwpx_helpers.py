@@ -147,7 +147,7 @@ def make_text_para(text, charpr, parapr):
     )
 
 
-def make_body_para(marker, text, marker_charpr="18", text_charpr="38", parapr="4"):
+def make_body_para(marker, text, marker_charpr="18", text_charpr="38", parapr="0"):
     """본문 문단: 볼드 마커 + 일반 내용. (예: "가. 내용텍스트")"""
     p_id = next_id()
     return (
@@ -419,7 +419,7 @@ INDENT_SPACES = {
 }
 
 
-def make_bullet_para(text, level=0, marker_charpr="18", text_charpr="38", parapr="4"):
+def make_bullet_para(text, level=0, marker_charpr="18", text_charpr="38", parapr="0"):
     """
     계층형 기호 문단.
     
@@ -465,7 +465,7 @@ def make_heading_para(text, level=1, charpr="18", parapr="4"):
     return make_bullet_para(text, level=level-1, marker_charpr=charpr, parapr=parapr)
 
 
-def make_key_value_para(key, value, key_charpr="18", val_charpr="38", parapr="4", indent=1):
+def make_key_value_para(key, value, key_charpr="18", val_charpr="38", parapr="0", indent=1):
     """
     키: 값 형태의 문단. 키는 볼드, 값은 일반.
     
@@ -515,3 +515,44 @@ def make_structured_content(items):
                          charpr=item.get("charpr", "38"), 
                          parapr=item.get("parapr", "4")))
     return paras
+
+
+# --- 버전 호환성 ---
+
+VERSION_TEMPLATES = {
+    "2018": {
+        "major": "5", "minor": "0", "micro": "5", "buildNumber": "0",
+        "xmlVersion": "1.2",
+        "appVersion": "10, 0, 3, 0 WIN32LEWindows_10",
+    },
+    "2020": {
+        "major": "5", "minor": "1", "micro": "0", "buildNumber": "0",
+        "xmlVersion": "1.4",
+        "appVersion": "11, 0, 0, 0 WIN32LEWindows_10",
+    },
+    "2022": {
+        "major": "5", "minor": "1", "micro": "1", "buildNumber": "0",
+        "xmlVersion": "1.5",
+        "appVersion": "13, 0, 0, 1408 WIN32LEWindows_10",
+    },
+}
+
+
+def make_version_xml(target="2018"):
+    """
+    한글 버전별 version.xml 생성.
+    
+    target: "2018", "2020", "2022"
+    기본값은 "2018" — 가장 넓은 호환성.
+    """
+    v = VERSION_TEMPLATES.get(target, VERSION_TEMPLATES["2018"])
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<hv:HCFVersion xmlns:hv="http://www.hancom.co.kr/hwpml/2011/version" '
+        f'tagetApplication="WORDPROCESSOR" '
+        f'major="{v["major"]}" minor="{v["minor"]}" micro="{v["micro"]}" '
+        f'buildNumber="{v["buildNumber"]}" os="1" '
+        f'xmlVersion="{v["xmlVersion"]}" '
+        f'application="Hancom Office Hangul" '
+        f'appVersion="{v["appVersion"]}"/>'
+    )
